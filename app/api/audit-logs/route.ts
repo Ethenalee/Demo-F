@@ -1,77 +1,84 @@
 import { NextResponse } from 'next/server';
-import { sql, ensureDatabaseInitialized } from '../../../lib/api/db';
-import type { AuditLog } from '../../../lib/api/types';
+import { ensureDatabaseInitialized } from '../../../lib/api/db';
+import { AuditLogService } from '../../../lib/api/services/audit-log.service';
+import { AuditLogQueryParamsSchema } from '../../../lib/api/schemas/patient.schema';
+import { createValidationHandler } from '../../../lib/api/middleware/validation';
+import { AppError } from '../../../lib/api/utils/errors';
+import { logger } from '../../../lib/api/utils/logger';
 
-// GET /api/audit-logs - Get audit logs, optionally filtered by patientId
-export async function GET(request: Request) {
-  // Ensure database is initialized before handling requests
+// Initialize service
+const auditLogService = new AuditLogService();
+
+// Validation handlers
+const validateQueryParams = createValidationHandler(AuditLogQueryParamsSchema);
+
+/**
+ * Error handler wrapper
+ */
+async function handleRequest<T>(
+  handler: () => Promise<T>
+): Promise<NextResponse<T | { error: string; details?: string; code?: string }>> {
   try {
+    // Ensure database is initialized
     const initTimeout = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('Database initialization timeout')), 5000);
     });
     await Promise.race([ensureDatabaseInitialized(), initTimeout]);
   } catch (error) {
-    console.error('Database initialization error:', error);
-    return NextResponse.json({
-      error: 'Database initialization failed',
-      details: String(error),
-      message: 'Please check your database connection and try again'
-    }, { status: 500 });
+    logger.error('Database initialization error', error);
+    return NextResponse.json(
+      {
+        error: 'Database initialization failed',
+        details: String(error),
+        message: 'Please check your database connection and try again',
+      },
+      { status: 500 }
+    );
   }
 
   try {
+    const result = await handler();
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof AppError) {
+      logger.error('Application error', error, { statusCode: error.statusCode });
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details,
+          code: error.code,
+        },
+        { status: error.statusCode }
+      );
+    }
+
+    logger.error('Unexpected error', error);
+    return NextResponse.json(
+      {
+        error: 'An unexpected error occurred',
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * GET /api/audit-logs - Get audit logs, optionally filtered by patientId
+ */
+export async function GET(request: Request) {
+  return handleRequest(async () => {
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get('patientId');
 
-    let result;
+    // Validate query parameters if patientId is provided
     if (patientId) {
-      result = await sql`
-        SELECT
-          id,
-          patient_id,
-          action,
-          field_name,
-          old_value,
-          new_value,
-          performed_by,
-          performed_at,
-          notes
-        FROM audit_logs
-        WHERE patient_id = ${patientId}
-        ORDER BY performed_at DESC
-      `;
-    } else {
-      result = await sql`
-        SELECT
-          id,
-          patient_id,
-          action,
-          field_name,
-          old_value,
-          new_value,
-          performed_by,
-          performed_at,
-          notes
-        FROM audit_logs
-        ORDER BY performed_at DESC
-      `;
+      validateQueryParams({ patientId });
     }
 
-    const auditLogs: AuditLog[] = result.rows.map((row) => ({
-      id: row.id,
-      patientId: row.patient_id,
-      action: row.action,
-      fieldName: row.field_name || undefined,
-      oldValue: row.old_value || undefined,
-      newValue: row.new_value || undefined,
-      performedBy: row.performed_by,
-      performedAt: row.performed_at,
-      notes: row.notes || undefined,
-    }));
+    // Fetch audit logs using service
+    const auditLogs = await auditLogService.getAuditLogs(patientId || undefined);
 
-    return NextResponse.json(auditLogs);
-  } catch (error) {
-    console.error('Error fetching audit logs:', error);
-    return NextResponse.json({ error: 'Failed to fetch audit logs' }, { status: 500 });
-  }
+    return auditLogs;
+  });
 }
