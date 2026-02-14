@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Patient, PatientStatus, PatientFormData } from '@/types';
 import { PatientStatus as PatientStatusConst } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,23 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [addressSearchValue, setAddressSearchValue] = useState('');
 
+  // Format date for date input (YYYY-MM-DD)
+  const formatDateForInput = (dateString: string): string => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) return '';
+      // Format as YYYY-MM-DD
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch {
+      return '';
+    }
+  };
+
   useEffect(() => {
     if (patient) {
       const address = patient.address;
@@ -53,7 +70,7 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
         firstName: patient.firstName,
         middleName: patient.middleName || '',
         lastName: patient.lastName,
-        dateOfBirth: patient.dateOfBirth,
+        dateOfBirth: formatDateForInput(patient.dateOfBirth),
         status: patient.status,
         email: patient.email || '',
         phone: patient.phone || '',
@@ -70,7 +87,11 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
         [address.street, address.city, address.state, address.zipCode].filter(Boolean).join(', ')
       );
     } else {
+      // Reset form when no patient (adding new)
+      setFormData(initialFormData);
       setAddressSearchValue('');
+      setErrors({});
+      setTouched({});
     }
   }, [patient]);
 
@@ -141,6 +162,38 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
   const getFieldError = (field: string) => {
     return touched[field] ? errors[field] : undefined;
   };
+
+  // Check if form is valid (all required fields are filled)
+  const isFormValid = useMemo(() => {
+    // Required fields: firstName, lastName, dateOfBirth, status, and all address fields
+    const hasRequiredFields =
+      formData.firstName.trim() !== '' &&
+      formData.lastName.trim() !== '' &&
+      formData.dateOfBirth.trim() !== '' &&
+      formData.status.trim() !== '' &&
+      formData.address.street.trim() !== '' &&
+      formData.address.city.trim() !== '' &&
+      formData.address.state.trim() !== '' &&
+      formData.address.zipCode.trim() !== '' &&
+      formData.address.country.trim() !== '';
+
+    // Validate data if fields are filled
+    if (hasRequiredFields) {
+      const patientValidation = validatePatientData({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        dateOfBirth: formData.dateOfBirth,
+        email: formData.email,
+        phone: formData.phone,
+      });
+
+      const addressValidation = validateAddress(formData.address);
+
+      return patientValidation.isValid && addressValidation.isValid;
+    }
+
+    return false;
+  }, [formData]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -422,6 +475,7 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
         <Button
           type="submit"
           className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700"
+          disabled={!isFormValid}
         >
           {patient ? 'Update Patient' : 'Add Patient'}
         </Button>
