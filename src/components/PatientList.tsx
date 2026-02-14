@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { Patient, PatientStatus, SortOption, AuditLog } from '@/types';
 import { PatientStatus as PatientStatusConst } from '@/types';
 import { usePatientStore } from '@/hooks/usePatientStore';
