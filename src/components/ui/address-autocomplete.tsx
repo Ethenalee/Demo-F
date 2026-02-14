@@ -11,6 +11,8 @@ interface AddressSuggestion {
     house_number?: string;
     road?: string;
     city?: string;
+    town?: string;
+    village?: string;
     state?: string;
     postcode?: string;
     country?: string;
@@ -48,7 +50,7 @@ export function AddressAutocomplete({
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Clear previous timeout
