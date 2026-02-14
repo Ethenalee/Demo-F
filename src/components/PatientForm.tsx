@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import type { Patient, PatientStatus, PatientFormData } from '@/types';
 import { PatientStatus as PatientStatusConst } from '@/types';
@@ -13,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { validatePatientData, validateAddress, cn } from '@/lib/utils';
 import { MapPin, User, Mail, Phone, Calendar, Home } from 'lucide-react';
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete';
 
 interface PatientFormProps {
   patient?: Patient;
@@ -41,9 +44,11 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
   const [formData, setFormData] = useState<PatientFormData>(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [addressSearchValue, setAddressSearchValue] = useState('');
 
   useEffect(() => {
     if (patient) {
+      const address = patient.address;
       setFormData({
         firstName: patient.firstName,
         middleName: patient.middleName || '',
@@ -53,20 +58,26 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
         email: patient.email || '',
         phone: patient.phone || '',
         address: {
-          street: patient.address.street,
-          city: patient.address.city,
-          state: patient.address.state,
-          zipCode: patient.address.zipCode,
-          country: patient.address.country,
+          street: address.street,
+          city: address.city,
+          state: address.state,
+          zipCode: address.zipCode,
+          country: address.country,
         },
       });
+      // Set address search value for display
+      setAddressSearchValue(
+        [address.street, address.city, address.state, address.zipCode].filter(Boolean).join(', ')
+      );
+    } else {
+      setAddressSearchValue('');
     }
   }, [patient]);
 
   const handleChange = (field: keyof PatientFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setTouched((prev) => ({ ...prev, [field]: true }));
-    
+
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -82,7 +93,7 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
       address: { ...prev.address, [field]: value },
     }));
     setTouched((prev) => ({ ...prev, [`address.${field}`]: true }));
-    
+
     if (errors[`address.${field}`]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -138,7 +149,7 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
           <User className="w-5 h-5 text-teal-600" />
           <h3>Personal Information</h3>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="firstName">
@@ -285,22 +296,40 @@ export function PatientForm({ patient, onSubmit, onCancel }: PatientFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="street">
-            Street Address <span className="text-red-500">*</span>
+          <Label htmlFor="address-autocomplete">
+            Address <span className="text-red-500">*</span>
+            <span className="text-xs text-slate-500 ml-2 font-normal">(Start typing to search)</span>
           </Label>
-          <div className="relative">
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input
-              id="street"
-              value={formData.address.street}
-              onChange={(e) => handleAddressChange('street', e.target.value)}
-              placeholder="Enter street address"
-              className={cn(
-                "pl-10",
-                getFieldError('address.street') && "border-red-500 focus-visible:ring-red-500"
-              )}
-            />
-          </div>
+          <AddressAutocomplete
+            value={addressSearchValue}
+            onChange={(value) => {
+              setAddressSearchValue(value);
+              // If user is typing manually, update street field
+              if (value && !value.includes(',')) {
+                handleAddressChange('street', value);
+              }
+            }}
+            onSelect={(address) => {
+              setFormData((prev) => ({
+                ...prev,
+                address: {
+                  ...prev.address,
+                  ...address,
+                },
+              }));
+              // Clear any address-related errors
+              setErrors((prev) => {
+                const newErrors = { ...prev };
+                delete newErrors['address.street'];
+                delete newErrors['address.city'];
+                delete newErrors['address.state'];
+                delete newErrors['address.zipCode'];
+                return newErrors;
+              });
+            }}
+            placeholder="Start typing an address (e.g., 123 Main St, New York)"
+            error={getFieldError('address.street')}
+          />
           {getFieldError('address.street') && (
             <p className="text-sm text-red-500">{getFieldError('address.street')}</p>
           )}

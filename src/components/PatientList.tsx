@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import type { Patient, PatientStatus, SortOption, AuditLog } from '@/types';
 import { PatientStatus as PatientStatusConst } from '@/types';

@@ -30,11 +30,11 @@ export function calculateAge(dateOfBirth: string): number {
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-  
+
   return age;
 }
 
@@ -60,10 +60,9 @@ export function validateAddress(address: {
   }
 
   if (!address.zipCode?.trim()) {
-    errors.zipCode = 'ZIP code is required';
-  } else if (!/^\d{5}(-\d{4})?$/.test(address.zipCode)) {
-    errors.zipCode = 'Invalid ZIP code format';
+    errors.zipCode = 'ZIP/Postal code is required';
   }
+  // Removed format validation to support international postal codes
 
   if (!address.country?.trim()) {
     errors.country = 'Country is required';
@@ -120,11 +119,11 @@ export function downloadCSV(csvContent: string, filename: string): void {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
-  
+
   link.setAttribute('href', url);
   link.setAttribute('download', filename);
   link.style.visibility = 'hidden';
-  
+
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

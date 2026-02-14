@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useCallback, useEffect } from 'react';
 import type {
   Patient,
@@ -8,7 +10,29 @@ import type {
   PatientFormData
 } from '@/types';
 
+// API base URL - use relative path for vercel dev
 const API_BASE = '/api';
+
+// Helper function to add timeout to fetch
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout - the server took too long to respond');
+    }
+    throw error;
+  }
+}
 
 export function usePatientStore() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -51,9 +75,11 @@ export function usePatientStore() {
         params.append('dateTo', filter.dateRange.to.toISOString());
       }
 
-      const response = await fetch(`${API_BASE}/patients?${params.toString()}`);
+      const url = `${API_BASE}/patients?${params.toString()}`;
+      const response = await fetchWithTimeout(url);
       if (!response.ok) {
-        throw new Error('Failed to fetch patients');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch patients: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -79,7 +105,7 @@ export function usePatientStore() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/patients`, {
+      const response = await fetchWithTimeout(`${API_BASE}/patients`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +114,8 @@ export function usePatientStore() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create patient');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `Failed to create patient: ${response.status} ${response.statusText}`);
       }
 
       const newPatient = await response.json();
@@ -110,7 +137,7 @@ export function usePatientStore() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/patients/${id}`, {
+      const response = await fetchWithTimeout(`${API_BASE}/patients/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -119,7 +146,8 @@ export function usePatientStore() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update patient');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `Failed to update patient: ${response.status} ${response.statusText}`);
       }
 
       const updatedPatient = await response.json();
@@ -141,12 +169,13 @@ export function usePatientStore() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/patients/${id}`, {
+      const response = await fetchWithTimeout(`${API_BASE}/patients/${id}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete patient');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `Failed to delete patient: ${response.status} ${response.statusText}`);
       }
 
       // Refresh the patient list
@@ -162,7 +191,7 @@ export function usePatientStore() {
 
   const getPatientById = useCallback(async (id: string): Promise<Patient | null> => {
     try {
-      const response = await fetch(`${API_BASE}/patients/${id}`);
+      const response = await fetchWithTimeout(`${API_BASE}/patients/${id}`);
       if (!response.ok) {
         if (response.status === 404) {
           return null;
@@ -191,11 +220,13 @@ export function usePatientStore() {
 
   const getAuditLogsForPatient = useCallback(async (patientId: string): Promise<AuditLog[]> => {
     try {
-      const response = await fetch(`${API_BASE}/audit-logs?patientId=${patientId}`);
+      const response = await fetchWithTimeout(`${API_BASE}/audit-logs?patientId=${patientId}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch audit logs');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch audit logs: ${response.status} ${response.statusText}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return Array.isArray(data) ? data : (data.auditLogs || []);
     } catch (err) {
       console.error('Error fetching audit logs:', err);
       return [];
@@ -204,11 +235,13 @@ export function usePatientStore() {
 
   const getAllAuditLogs = useCallback(async (): Promise<AuditLog[]> => {
     try {
-      const response = await fetch(`${API_BASE}/audit-logs`);
+      const response = await fetchWithTimeout(`${API_BASE}/audit-logs`);
       if (!response.ok) {
-        throw new Error('Failed to fetch audit logs');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch audit logs: ${response.status} ${response.statusText}`);
       }
-      return await response.json();
+      const data = await response.json();
+      return Array.isArray(data) ? data : (data.auditLogs || []);
     } catch (err) {
       console.error('Error fetching audit logs:', err);
       return [];
